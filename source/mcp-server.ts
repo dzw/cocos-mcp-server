@@ -210,21 +210,7 @@ export class MCPServer {
         
         req.on('end', async () => {
             try {
-                // Enhanced JSON parsing with better error handling
-                let message;
-                try {
-                    message = JSON.parse(body);
-                } catch (parseError: any) {
-                    // Try to fix common JSON issues
-                    const fixedBody = this.fixCommonJsonIssues(body);
-                    try {
-                        message = JSON.parse(fixedBody);
-                        console.log('[MCPServer] Fixed JSON parsing issue');
-                    } catch (secondError) {
-                        throw new Error(`JSON parsing failed: ${parseError.message}. Original body: ${body.substring(0, 500)}...`);
-                    }
-                }
-                
+                const message = this.parseJsonBody(body);
                 const response = await this.handleMessage(message);
                 res.writeHead(200);
                 res.end(JSON.stringify(response));
@@ -292,24 +278,56 @@ export class MCPServer {
         }
     }
 
-    private fixCommonJsonIssues(jsonStr: string): string {
-        let fixed = jsonStr;
-        
-        // Fix common escape character issues
-        fixed = fixed
-            // Fix unescaped quotes in strings
-            .replace(/([^\\])"([^"]*[^\\])"([^,}\]:])/g, '$1\\"$2\\"$3')
-            // Fix unescaped backslashes
-            .replace(/([^\\])\\([^"\\\/bfnrt])/g, '$1\\\\$2')
-            // Fix trailing commas
-            .replace(/,(\s*[}\]])/g, '$1')
-            // Fix single quotes (should be double quotes)
-            .replace(/'/g, '"')
-            // Fix common control characters
-            .replace(/\n/g, '\\n')
-            .replace(/\r/g, '\\r')
-            .replace(/\t/g, '\\t');
-        
+    private parseJsonBody(body: string): any {
+        const trimmedBody = body.trim().replace(/^\uFEFF/, '');
+        if (!trimmedBody) {
+            return {};
+        }
+
+        try {
+            return JSON.parse(trimmedBody);
+        } catch (parseError: any) {
+            const normalizedBody = this.normalizeJsonLikeBody(trimmedBody);
+            if (normalizedBody !== trimmedBody) {
+                try {
+                    console.log('[MCPServer] Fixed non-standard JSON payload');
+                    return JSON.parse(normalizedBody);
+                } catch (normalizedError) {
+                    // Fall through to the original error below so the user can see the raw body.
+                }
+            }
+
+            throw new Error(`JSON parsing failed: ${parseError.message}. Original body: ${trimmedBody.substring(0, 500)}...`);
+        }
+    }
+
+    private normalizeJsonLikeBody(jsonLike: string): string {
+        let fixed = jsonLike;
+
+        // Quote unquoted object keys: {jsonrpc:...} -> {"jsonrpc":...}
+        fixed = fixed.replace(/([{,]\s*)([A-Za-z_$][\w$-]*)(\s*:)/g, '$1"$2"$3');
+
+        // Quote single-quoted string literals.
+        fixed = fixed.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_match, content) => {
+            const escaped = String(content).replace(/"/g, '\\"');
+            return `"${escaped}"`;
+        });
+
+        // Quote bare string values such as method:tools/list.
+        fixed = fixed.replace(/:\s*([A-Za-z_$][\w$./-]*)(\s*[,}])/g, (_match, value, suffix) => {
+            if (value === 'true' || value === 'false' || value === 'null') {
+                return `: ${value}${suffix}`;
+            }
+
+            return `: "${value}"${suffix}`;
+        });
+
+        // MCP requires jsonrpc to be a string; accept non-standard jsonrpc:2.0 inputs.
+        fixed = fixed.replace(/("jsonrpc"\s*:\s*)(\d+(?:\.\d+)?)(\s*[,}])/g, '$1"$2"$3');
+
+        // Remove trailing commas in objects/arrays.
+        fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
+
         return fixed;
     }
 
@@ -352,25 +370,17 @@ export class MCPServer {
                 const toolName = pathParts[2];
                 const fullToolName = `${category}_${toolName}`;
                 
-                // Parse parameters with enhanced error handling
                 let params;
                 try {
-                    params = body ? JSON.parse(body) : {};
+                    params = this.parseJsonBody(body);
                 } catch (parseError: any) {
-                    // Try to fix JSON issues
-                    const fixedBody = this.fixCommonJsonIssues(body);
-                    try {
-                        params = JSON.parse(fixedBody);
-                        console.log('[MCPServer] Fixed API JSON parsing issue');
-                    } catch (secondError: any) {
-                        res.writeHead(400);
-                        res.end(JSON.stringify({
-                            error: 'Invalid JSON in request body',
-                            details: parseError.message,
-                            receivedBody: body.substring(0, 200)
-                        }));
-                        return;
-                    }
+                    res.writeHead(400);
+                    res.end(JSON.stringify({
+                        error: 'Invalid JSON in request body',
+                        details: parseError.message,
+                        receivedBody: body.trim().substring(0, 200)
+                    }));
+                    return;
                 }
                 
                 // Execute tool

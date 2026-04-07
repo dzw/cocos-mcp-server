@@ -124,12 +124,24 @@ module.exports = Editor.Panel.define({
                             const settingsData = {
                                 port: settings.value.port,
                                 autoStart: settings.value.autoStart,
-                                enableDebugLog: settings.value.enableDebugLog || settings.value.debugLog,
+                                enableDebugLog: settings.value.enableDebugLog,
                                 maxConnections: settings.value.maxConnections
                             };
-                            
+
                             const result = await Editor.Message.request('cocos-mcp-server', 'update-settings', settingsData);
                             console.log('[Vue App] Save settings result:', result);
+
+                            // 重新加载服务器状态以更新界面
+                            const serverStatus = await Editor.Message.request('cocos-mcp-server', 'get-server-status');
+                            if (serverStatus && serverStatus.settings) {
+                                settings.value = {
+                                    port: serverStatus.settings.port || 3000,
+                                    autoStart: serverStatus.settings.autoStart || false,
+                                    enableDebugLog: serverStatus.settings.enableDebugLog || false,
+                                    maxConnections: serverStatus.settings.maxConnections || 10
+                                };
+                            }
+
                             settingsChanged.value = false;
                         } catch (error) {
                             console.error('[Vue App] Failed to save settings:', error);

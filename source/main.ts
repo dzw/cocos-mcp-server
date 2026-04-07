@@ -69,25 +69,37 @@ export const methods: { [key: string]: (...any: any) => any } = {
         const wasRunning = mcpServer ? mcpServer.getStatus().running : false;
         const willAutoStart = settings.autoStart;
 
-        saveSettings(settings);
+        // 确保所有必填字段都有值
+        const completeSettings: MCPServerSettings = {
+            port: settings.port || 3000,
+            autoStart: settings.autoStart || false,
+            enableDebugLog: settings.enableDebugLog || false,
+            allowedOrigins: settings.allowedOrigins || ['*'],
+            maxConnections: settings.maxConnections || 10
+        };
+
+        saveSettings(completeSettings);
 
         if (mcpServer) {
             mcpServer.stop();
             const enabledTools = toolManager.getEnabledTools();
-            mcpServer = new MCPServer(settings);
+            mcpServer = new MCPServer(completeSettings);
             mcpServer.updateEnabledTools(enabledTools);
             // 只在 autoStart 为 true 或之前正在运行时才启动
             if (willAutoStart || wasRunning) {
                 mcpServer.start();
             }
         } else {
-            mcpServer = new MCPServer(settings);
+            mcpServer = new MCPServer(completeSettings);
             const enabledTools = toolManager.getEnabledTools();
             mcpServer.updateEnabledTools(enabledTools);
             if (willAutoStart) {
                 mcpServer.start();
             }
         }
+
+        // 返回保存后的完整设置
+        return completeSettings;
     },
 
     /**
