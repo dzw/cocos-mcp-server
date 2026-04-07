@@ -44,7 +44,7 @@ export class MCPServer {
             this.tools.broadcast = new BroadcastTools();
             this.tools.sceneAdvanced = new SceneAdvancedTools();
             this.tools.sceneView = new SceneViewTools();
-            this.tools.referenceImage = new ReferenceImageTools();
+            this.tools.refImage = new ReferenceImageTools();
             this.tools.assetAdvanced = new AssetAdvancedTools();
             this.tools.validation = new ValidationTools();
             console.log('[MCPServer] Tools initialized successfully');

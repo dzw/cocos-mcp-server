@@ -110,7 +110,7 @@ export class ToolManager {
                 broadcast: new BroadcastTools(),
                 sceneAdvanced: new SceneAdvancedTools(),
                 sceneView: new SceneViewTools(),
-                referenceImage: new ReferenceImageTools(),
+                refImage: new ReferenceImageTools(),
                 assetAdvanced: new AssetAdvancedTools(),
                 validation: new ValidationTools()
             };
