@@ -66,14 +66,27 @@ export const methods: { [key: string]: (...any: any) => any } = {
      * @zh 更新服务器设置
      */
     updateSettings(settings: MCPServerSettings) {
+        const wasRunning = mcpServer ? mcpServer.getStatus().running : false;
+        const willAutoStart = settings.autoStart;
+
         saveSettings(settings);
+
         if (mcpServer) {
             mcpServer.stop();
+            const enabledTools = toolManager.getEnabledTools();
             mcpServer = new MCPServer(settings);
-            mcpServer.start();
+            mcpServer.updateEnabledTools(enabledTools);
+            // 只在 autoStart 为 true 或之前正在运行时才启动
+            if (willAutoStart || wasRunning) {
+                mcpServer.start();
+            }
         } else {
             mcpServer = new MCPServer(settings);
-            mcpServer.start();
+            const enabledTools = toolManager.getEnabledTools();
+            mcpServer.updateEnabledTools(enabledTools);
+            if (willAutoStart) {
+                mcpServer.start();
+            }
         }
     },
 

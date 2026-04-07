@@ -576,9 +576,24 @@ export class ComponentTools implements ToolExecutor {
                 // Step 4: 处理属性值和设置
                 const originalValue = propertyInfo.originalValue;
                 let processedValue: any;
-                
+
+                // 如果未提供 propertyType，使用 analyzeProperty 检测的类型
+                let actualPropertyType = propertyType || propertyInfo.type;
+
+                // 标准化类型名称：将 cc.Node, cc.Component 等转换为 node, component
+                if (actualPropertyType === 'cc.Node' || actualPropertyType === 'cc.Node[]') {
+                    actualPropertyType = actualPropertyType === 'cc.Node[]' ? 'nodeArray' : 'node';
+                } else if (actualPropertyType && actualPropertyType.startsWith('cc.') && !['cc.Sprite', 'cc.Label', 'cc.Button'].includes(actualPropertyType)) {
+                    // 检查是否是组件引用类型（非内置组件）
+                    if (actualPropertyType.includes('Component') || actualPropertyType === 'cc.AudioSource') {
+                        actualPropertyType = 'component';
+                    }
+                }
+
+                console.log(`[ComponentTools] Using propertyType: ${propertyType} -> actualPropertyType: ${actualPropertyType}`);
+
                 // 根据明确的propertyType处理属性值
-                switch (propertyType) {
+                switch (actualPropertyType) {
                     case 'string':
                         processedValue = String(value);
                         break;
@@ -1319,11 +1334,110 @@ export class ComponentTools implements ToolExecutor {
                 originalValue: undefined
             };
         }
-        
+
         let type = 'unknown';
-        
+
+        // 首先检查属性描述符中的 type 字段（这是最准确的类型信息）
+        if (propertyValue && typeof propertyValue === 'object' && propertyValue.type) {
+            const declaredType = propertyValue.type;
+            console.log(`[analyzeProperty] Found declared type: ${declaredType} for property ${propertyName}`);
+
+            // 根据声明的类型确定处理方式
+            if (declaredType === 'cc.Node' || declaredType === 'cc.Node[]') {
+                type = declaredType === 'cc.Node[]' ? 'nodeArray' : 'node';
+                return {
+                    exists: true,
+                    type,
+                    availableProperties,
+                    originalValue: propertyValue.value !== undefined ? propertyValue.value : propertyValue
+                };
+            } else if (declaredType === 'cc.Component' || declaredType.includes('Component') ||
+                       declaredType === 'cc.AudioSource' || declaredType === 'cc.Label' ||
+                       declaredType === 'cc.Sprite' || declaredType === 'cc.Button') {
+                // 组件引用类型
+                type = 'component';
+                return {
+                    exists: true,
+                    type,
+                    availableProperties,
+                    originalValue: propertyValue.value !== undefined ? propertyValue.value : propertyValue
+                };
+            } else if (declaredType === 'cc.SpriteFrame' || declaredType === 'cc.Prefab' ||
+                       declaredType === 'cc.Material' || declaredType === 'cc.Font' ||
+                       declaredType === 'cc.Texture' || declaredType === 'cc.AudioClip') {
+                type = 'asset';
+                return {
+                    exists: true,
+                    type,
+                    availableProperties,
+                    originalValue: propertyValue.value !== undefined ? propertyValue.value : propertyValue
+                };
+            } else if (declaredType === 'cc.Color') {
+                type = 'color';
+                return {
+                    exists: true,
+                    type,
+                    availableProperties,
+                    originalValue: propertyValue.value !== undefined ? propertyValue.value : propertyValue
+                };
+            } else if (declaredType === 'cc.Vec2') {
+                type = 'vec2';
+                return {
+                    exists: true,
+                    type,
+                    availableProperties,
+                    originalValue: propertyValue.value !== undefined ? propertyValue.value : propertyValue
+                };
+            } else if (declaredType === 'cc.Vec3') {
+                type = 'vec3';
+                return {
+                    exists: true,
+                    type,
+                    availableProperties,
+                    originalValue: propertyValue.value !== undefined ? propertyValue.value : propertyValue
+                };
+            } else if (declaredType === 'cc.Size') {
+                type = 'size';
+                return {
+                    exists: true,
+                    type,
+                    availableProperties,
+                    originalValue: propertyValue.value !== undefined ? propertyValue.value : propertyValue
+                };
+            } else if (declaredType === 'String') {
+                type = 'string';
+                return {
+                    exists: true,
+                    type,
+                    availableProperties,
+                    originalValue: propertyValue.value !== undefined ? propertyValue.value : propertyValue
+                };
+            } else if (declaredType === 'Number' || declaredType === 'Integer' || declaredType === 'Float') {
+                type = 'number';
+                return {
+                    exists: true,
+                    type,
+                    availableProperties,
+                    originalValue: propertyValue.value !== undefined ? propertyValue.value : propertyValue
+                };
+            } else if (declaredType === 'Boolean') {
+                type = 'boolean';
+                return {
+                    exists: true,
+                    type,
+                    availableProperties,
+                    originalValue: propertyValue.value !== undefined ? propertyValue.value : propertyValue
+                };
+            }
+        }
+
+        // 如果属性有 value 字段，提取实际值进行类型检测
+        const actualValue = (propertyValue && typeof propertyValue === 'object' && 'value' in propertyValue)
+            ? propertyValue.value
+            : propertyValue;
+
         // 智能类型检测
-        if (Array.isArray(propertyValue)) {
+        if (Array.isArray(actualValue)) {
             // 数组类型检测
             if (propertyName.toLowerCase().includes('node')) {
                 type = 'nodeArray';
@@ -1332,29 +1446,29 @@ export class ComponentTools implements ToolExecutor {
             } else {
                 type = 'array';
             }
-        } else if (typeof propertyValue === 'string') {
+        } else if (typeof actualValue === 'string') {
             // Check if property name suggests it's an asset
             if (['spriteFrame', 'texture', 'material', 'font', 'clip', 'prefab'].includes(propertyName.toLowerCase())) {
                 type = 'asset';
             } else {
                 type = 'string';
             }
-        } else if (typeof propertyValue === 'number') {
+        } else if (typeof actualValue === 'number') {
             type = 'number';
-        } else if (typeof propertyValue === 'boolean') {
+        } else if (typeof actualValue === 'boolean') {
             type = 'boolean';
-        } else if (propertyValue && typeof propertyValue === 'object') {
+        } else if (actualValue && typeof actualValue === 'object') {
             try {
-                const keys = Object.keys(propertyValue);
+                const keys = Object.keys(actualValue);
                 if (keys.includes('r') && keys.includes('g') && keys.includes('b')) {
                     type = 'color';
                 } else if (keys.includes('x') && keys.includes('y')) {
-                    type = propertyValue.z !== undefined ? 'vec3' : 'vec2';
+                    type = actualValue.z !== undefined ? 'vec3' : 'vec2';
                 } else if (keys.includes('width') && keys.includes('height')) {
                     type = 'size';
                 } else if (keys.includes('uuid') || keys.includes('__uuid__')) {
                     // 检查是否是节点引用（通过属性名或__id__属性判断）
-                    if (propertyName.toLowerCase().includes('node') || 
+                    if (propertyName.toLowerCase().includes('node') ||
                         propertyName.toLowerCase().includes('target') ||
                         keys.includes('__id__')) {
                         type = 'node';
@@ -1368,14 +1482,14 @@ export class ComponentTools implements ToolExecutor {
                     type = 'object';
                 }
             } catch (error) {
-                console.warn(`[analyzeProperty] Error checking property type for: ${JSON.stringify(propertyValue)}`);
+                console.warn(`[analyzeProperty] Error checking property type for: ${JSON.stringify(actualValue)}`);
                 type = 'object';
             }
-        } else if (propertyValue === null || propertyValue === undefined) {
+        } else if (actualValue === null || actualValue === undefined) {
             // For null/undefined values, check property name to determine type
             if (['spriteFrame', 'texture', 'material', 'font', 'clip', 'prefab'].includes(propertyName.toLowerCase())) {
                 type = 'asset';
-            } else if (propertyName.toLowerCase().includes('node') || 
+            } else if (propertyName.toLowerCase().includes('node') ||
                       propertyName.toLowerCase().includes('target')) {
                 type = 'node';
             } else if (propertyName.toLowerCase().includes('component')) {
@@ -1384,12 +1498,12 @@ export class ComponentTools implements ToolExecutor {
                 type = 'unknown';
             }
         }
-        
+
         return {
             exists: true,
             type,
             availableProperties,
-            originalValue: propertyValue
+            originalValue: actualValue
         };
     }
 

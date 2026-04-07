@@ -28,7 +28,7 @@ interface Configuration {
 interface ServerSettings {
     port: number;
     autoStart: boolean;
-    debugLog: boolean;
+    enableDebugLog: boolean;
     maxConnections: number;
 }
 
@@ -66,7 +66,7 @@ module.exports = Editor.Panel.define({
                     const settings = ref<ServerSettings>({
                         port: 3000,
                         autoStart: false,
-                        debugLog: false,
+                        enableDebugLog: false,
                         maxConnections: 10
                     });
                     
@@ -106,7 +106,7 @@ module.exports = Editor.Panel.define({
                                 const currentSettings = {
                                     port: settings.value.port,
                                     autoStart: settings.value.autoStart,
-                                    enableDebugLog: settings.value.debugLog,
+                                    enableDebugLog: settings.value.enableDebugLog,
                                     maxConnections: settings.value.maxConnections
                                 };
                                 await Editor.Message.request('cocos-mcp-server', 'update-settings', currentSettings);
@@ -124,7 +124,7 @@ module.exports = Editor.Panel.define({
                             const settingsData = {
                                 port: settings.value.port,
                                 autoStart: settings.value.autoStart,
-                                debugLog: settings.value.debugLog,
+                                enableDebugLog: settings.value.enableDebugLog || settings.value.debugLog,
                                 maxConnections: settings.value.maxConnections
                             };
                             
@@ -302,7 +302,7 @@ module.exports = Editor.Panel.define({
                                 settings.value = {
                                     port: serverStatus.settings.port || 3000,
                                     autoStart: serverStatus.settings.autoStart || false,
-                                    debugLog: serverStatus.settings.enableDebugLog || false,
+                                    enableDebugLog: serverStatus.settings.enableDebugLog || false,
                                     maxConnections: serverStatus.settings.maxConnections || 10
                                 };
                                 console.log('[Vue App] Server settings loaded from status:', serverStatus.settings);

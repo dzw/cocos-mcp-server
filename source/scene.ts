@@ -431,5 +431,81 @@ export const methods: { [key: string]: (...any: any) => any } = {
         } catch (error: any) {
             return { success: false, error: error.message };
         }
+    },
+
+    /**
+     * Batch set SpriteFrame for all Sprite components that don't have one
+     * 为所有没有设置SpriteFrame的Sprite组件批量设置SpriteFrame
+     */
+    batchSetEmptySpriteFrames(spriteFrameUuid: string) {
+        try {
+            const { director, Sprite, assetManager } = require('cc');
+            const scene = director.getScene();
+            if (!scene) {
+                return { success: false, error: 'No active scene' };
+            }
+
+            const results: { nodeName: string; nodeUuid: string; success: boolean; message: string }[] = [];
+            const nodesToUpdate: { node: any; sprite: any }[] = [];
+
+            // 收集所有需要更新的Sprite组件
+            const collectSprites = (node: any) => {
+                const sprite = node.getComponent(Sprite);
+                if (sprite && !sprite.spriteFrame) {
+                    nodesToUpdate.push({ node, sprite });
+                }
+                node.children.forEach((child: any) => collectSprites(child));
+            };
+
+            scene.children.forEach((child: any) => collectSprites(child));
+
+            if (nodesToUpdate.length === 0) {
+                return {
+                    success: true,
+                    message: 'No Sprite components with empty spriteFrame found',
+                    data: { updatedCount: 0, results: [] }
+                };
+            }
+
+            // 先加载SpriteFrame资源
+            assetManager.loadAny({ uuid: spriteFrameUuid }, (err: any, spriteFrame: any) => {
+                if (err || !spriteFrame) {
+                    console.error(`Failed to load SpriteFrame with UUID: ${spriteFrameUuid}`, err);
+                    return;
+                }
+
+                // 设置所有收集到的Sprite组件
+                nodesToUpdate.forEach(({ node, sprite }) => {
+                    try {
+                        sprite.spriteFrame = spriteFrame;
+                        results.push({
+                            nodeName: node.name,
+                            nodeUuid: node.uuid,
+                            success: true,
+                            message: 'SpriteFrame set successfully'
+                        });
+                    } catch (e: any) {
+                        results.push({
+                            nodeName: node.name,
+                            nodeUuid: node.uuid,
+                            success: false,
+                            message: e.message
+                        });
+                    }
+                });
+            });
+
+            return {
+                success: true,
+                message: `Batch SpriteFrame setting initiated for ${nodesToUpdate.length} Sprite components`,
+                data: {
+                    totalFound: nodesToUpdate.length,
+                    spriteFrameUuid: spriteFrameUuid,
+                    results: results
+                }
+            };
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
     }
 };
