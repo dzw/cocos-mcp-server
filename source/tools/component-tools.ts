@@ -223,6 +223,50 @@ export class ComponentTools implements ToolExecutor {
                         }
                     }
                 }
+            },
+            {
+                name: 'set_shapedrawer_properties',
+                description: 'Set ShapeDrawer component properties by node name. This is a convenient tool to configure ShapeDrawer components on specific nodes.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        nodeName: {
+                            type: 'string',
+                            description: 'Node name to find the ShapeDrawer component (e.g., "HintButton", "CompleteButton")'
+                        },
+                        fillColor: {
+                            type: 'string',
+                            description: 'Fill color in hex format (e.g., "#F6ECDB", "#B9782D")'
+                        },
+                        radius: {
+                            type: 'number',
+                            description: 'Border radius (0 for sharp corners)'
+                        },
+                        enableStroke: {
+                            type: 'boolean',
+                            description: 'Enable stroke/border'
+                        },
+                        shapeType: {
+                            type: 'integer',
+                            description: 'Shape type: 0=RECTANGLE, 1=ROUNDED_RECT, 2=CIRCLE',
+                            enum: [0, 1, 2]
+                        },
+                        strokeWidth: {
+                            type: 'number',
+                            description: 'Stroke width (only used when enableStroke is true)'
+                        },
+                        strokeColor: {
+                            type: 'string',
+                            description: 'Stroke color in hex format (e.g., "#000000")'
+                        },
+                        redraw: {
+                            type: 'boolean',
+                            description: 'Whether to call redraw() after setting properties (default: true)',
+                            default: true
+                        }
+                    },
+                    required: ['nodeName']
+                }
             }
         ];
     }
@@ -245,6 +289,8 @@ export class ComponentTools implements ToolExecutor {
                 return await this.attachScript(args.nodeUuid, args.scriptPath);
             case 'get_available_components':
                 return await this.getAvailableComponents(args.category);
+            case 'set_shapedrawer_properties':
+                return await this.setShapeDrawerProperties(args);
             default:
                 throw new Error(`Unknown tool: ${toolName}`);
         }
@@ -2118,5 +2164,149 @@ export class ComponentTools implements ToolExecutor {
             console.error(`[quickVerifyAsset] Error:`, error);
             return null;
         }
+    }
+
+    /**
+     * 通过节点名称设置 ShapeDrawer 组件属性
+     */
+    private async setShapeDrawerProperties(args: any): Promise<ToolResponse> {
+        const { nodeName, fillColor, radius, enableStroke, shapeType, strokeWidth, strokeColor, redraw = true } = args;
+        
+        if (!nodeName) {
+            return { success: false, error: 'nodeName is required' };
+        }
+
+        try {
+            // 1. 查找节点
+            const findResult = await this.findNodeByName(nodeName);
+            if (!findResult.success || !findResult.data?.nodeUuid) {
+                return { 
+                    success: false, 
+                    error: `Node '${nodeName}' not found: ${findResult.error}` 
+                };
+            }
+
+            const nodeUuid = findResult.data.nodeUuid;
+
+            // 2. 获取节点上的 ShapeDrawer 组件
+            const componentsResult = await this.getComponents(nodeUuid);
+            if (!componentsResult.success || !componentsResult.data?.components) {
+                return { 
+                    success: false, 
+                    error: `Failed to get components for node '${nodeName}': ${componentsResult.error}` 
+                };
+            }
+
+            // 查找 ShapeDrawer 组件（可能是 "ShapeDrawer" 或脚本的 cid）
+            const shapeDrawerComp = componentsResult.data.components.find(
+                (comp: any) => comp.type === 'ShapeDrawer' || 
+                              (comp.properties && Object.keys(comp.properties).some(key => 
+                                  key.includes('fillColor') || key.includes('radius') || key.includes('shapeType')
+                              ))
+            );
+
+            if (!shapeDrawerComp) {
+                return { 
+                    success: false, 
+                    error: `ShapeDrawer component not found on node '${nodeName}'. Available components: ${componentsResult.data.components.map((c: any) => c.type).join(', ')}` 
+                };
+            }
+
+            console.log(`[ComponentTools] Found ShapeDrawer on node '${nodeName}', setting properties...`);
+
+            // 3. 设置属性
+            const propertiesToSet: Array<{ property: string; value: any; propertyType: string }> = [];
+
+            if (fillColor !== undefined) {
+                propertiesToSet.push({ property: 'fillColor', value: fillColor, propertyType: 'color' });
+            }
+            if (radius !== undefined) {
+                propertiesToSet.push({ property: 'radius', value: radius, propertyType: 'number' });
+            }
+            if (enableStroke !== undefined) {
+                propertiesToSet.push({ property: 'enableStroke', value: enableStroke, propertyType: 'boolean' });
+            }
+            if (shapeType !== undefined) {
+                propertiesToSet.push({ property: 'shapeType', value: shapeType, propertyType: 'integer' });
+            }
+            if (strokeWidth !== undefined) {
+                propertiesToSet.push({ property: 'strokeWidth', value: strokeWidth, propertyType: 'number' });
+            }
+            if (strokeColor !== undefined) {
+                propertiesToSet.push({ property: 'strokeColor', value: strokeColor, propertyType: 'color' });
+            }
+
+            if (propertiesToSet.length === 0) {
+                return { 
+                    success: false, 
+                    error: 'No properties to set. Provide at least one of: fillColor, radius, enableStroke, shapeType, strokeWidth, strokeColor' 
+                };
+            }
+
+            // 4. 批量设置属性
+            const setResult = await this.setComponentProperties({
+                nodeUuid,
+                componentType: shapeDrawerComp.type,
+                properties: propertiesToSet
+            });
+
+            if (!setResult.success) {
+                return setResult;
+            }
+
+            // 5. 如果需要，调用 redraw()
+            if (redraw) {
+                try {
+                    await Editor.Message.request('scene', 'execute-component-method', {
+                        uuid: nodeUuid,
+                        class: shapeDrawerComp.type,
+                        method: 'redraw',
+                        args: []
+                    });
+                    console.log(`[ComponentTools] Called redraw() on ShapeDrawer`);
+                } catch (err: any) {
+                    console.warn(`[ComponentTools] Failed to call redraw(): ${err.message}`);
+                }
+            }
+
+            return {
+                success: true,
+                message: `ShapeDrawer properties set successfully on node '${nodeName}'`,
+                data: {
+                    nodeName,
+                    nodeUuid,
+                    componentType: shapeDrawerComp.type,
+                    propertiesSet: propertiesToSet.map(p => p.property),
+                    redrawCalled: redraw
+                }
+            };
+
+        } catch (error: any) {
+            console.error('[ComponentTools] setShapeDrawerProperties error:', error);
+            return { 
+                success: false, 
+                error: `Failed to set ShapeDrawer properties: ${error.message}` 
+            };
+        }
+    }
+
+    /**
+     * 通过名称查找节点
+     */
+    private async findNodeByName(name: string): Promise<ToolResponse> {
+        return new Promise((resolve) => {
+            Editor.Message.request('scene', 'query-node-by-name', name).then((nodeUuid: any) => {
+                if (nodeUuid) {
+                    resolve({
+                        success: true,
+                        data: { nodeUuid }
+                    });
+                } else {
+                    resolve({ success: false, error: `Node '${name}' not found` });
+                }
+            }).catch((err: Error) => {
+                resolve({ success: false, error: `Failed to find node: ${err.message}` });
+            });
+        });
     }
 }
