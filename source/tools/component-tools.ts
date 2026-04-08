@@ -425,7 +425,7 @@ export class ComponentTools implements ToolExecutor {
     }
 
     private extractComponentProperties(component: any): Record<string, any> {
-        console.log(`[extractComponentProperties] Processing component:`, Object.keys(component));
+        console.log(`[extractComponentProperties] Processing component:`, Object.keys(component).join(', '));
         
         // 检查组件是否有 value 属性，这通常包含实际的组件属性
         if (component.value && typeof component.value === 'object') {
@@ -748,9 +748,9 @@ export class ComponentTools implements ToolExecutor {
                         throw new Error(`Unsupported property type: ${propertyType}`);
                 }
                 
-                console.log(`[ComponentTools] Converting value: ${JSON.stringify(value)} -> ${JSON.stringify(processedValue)} (type: ${propertyType})`);
-                console.log(`[ComponentTools] Property analysis result: propertyInfo.type="${propertyInfo.type}", propertyType="${propertyType}"`);
-                console.log(`[ComponentTools] Will use color special handling: ${propertyType === 'color' && processedValue && typeof processedValue === 'object'}`);
+                console.log(`[ComponentTools] Converting value: ${JSON.stringify(value)} -> ${JSON.stringify(processedValue)} (type: ${actualPropertyType})`);
+                console.log(`[ComponentTools] Property analysis result: propertyInfo.type="${propertyInfo.type}", actualPropertyType="${actualPropertyType}"`);
+                console.log(`[ComponentTools] Will use color special handling: ${actualPropertyType === 'color' && processedValue && typeof processedValue === 'object'}`);
                 
                 // 用于验证的实际期望值（对于组件引用需要特殊处理）
                 let actualExpectedValue = processedValue;
@@ -788,13 +788,13 @@ export class ComponentTools implements ToolExecutor {
                 let propertyPath = `__comps__.${rawComponentIndex}.${property}`;
                 
                 // 特殊处理资源类属性
-                if (propertyType === 'asset' || propertyType === 'spriteFrame' || propertyType === 'prefab' || 
-                    (propertyInfo.type === 'asset' && propertyType === 'string')) {
+                if (actualPropertyType === 'asset' || actualPropertyType === 'spriteFrame' || actualPropertyType === 'prefab' || 
+                    (propertyInfo.type === 'asset' && actualPropertyType === 'string')) {
                     
                     console.log(`[ComponentTools] Setting asset reference:`, {
                         value: processedValue,
                         property: property,
-                        propertyType: propertyType,
+                        actualPropertyType: actualPropertyType,
                         path: propertyPath
                     });
                     
@@ -808,7 +808,7 @@ export class ComponentTools implements ToolExecutor {
                         assetType = 'cc.Font';
                     } else if (property.toLowerCase().includes('clip')) {
                         assetType = 'cc.AudioClip';
-                    } else if (propertyType === 'prefab') {
+                    } else if (actualPropertyType === 'prefab') {
                         assetType = 'cc.Prefab';
                     }
                     
@@ -856,7 +856,7 @@ export class ComponentTools implements ToolExecutor {
                         path: `__comps__.${rawComponentIndex}.anchorY`,
                         dump: { value: anchorY }
                     });
-                } else if (propertyType === 'color' && processedValue && typeof processedValue === 'object') {
+                } else if (actualPropertyType === 'color' && processedValue && typeof processedValue === 'object') {
                     // 特殊处理颜色属性，确保RGBA值正确
                     // Cocos Creator颜色值范围是0-255
                     const colorValue = {
@@ -876,7 +876,7 @@ export class ComponentTools implements ToolExecutor {
                             type: 'cc.Color'
                         }
                     });
-                } else if (propertyType === 'vec3' && processedValue && typeof processedValue === 'object') {
+                } else if (actualPropertyType === 'vec3' && processedValue && typeof processedValue === 'object') {
                     // 特殊处理Vec3属性
                     const vec3Value = {
                         x: Number(processedValue.x) || 0,
@@ -892,7 +892,7 @@ export class ComponentTools implements ToolExecutor {
                             type: 'cc.Vec3'
                         }
                     });
-                } else if (propertyType === 'vec2' && processedValue && typeof processedValue === 'object') {
+                } else if (actualPropertyType === 'vec2' && processedValue && typeof processedValue === 'object') {
                     // 特殊处理Vec2属性
                     const vec2Value = {
                         x: Number(processedValue.x) || 0,
@@ -907,7 +907,7 @@ export class ComponentTools implements ToolExecutor {
                             type: 'cc.Vec2'
                         }
                     });
-                } else if (propertyType === 'size' && processedValue && typeof processedValue === 'object') {
+                } else if (actualPropertyType === 'size' && processedValue && typeof processedValue === 'object') {
                     // 特殊处理Size属性
                     const sizeValue = {
                         width: Number(processedValue.width) || 0,
@@ -922,7 +922,7 @@ export class ComponentTools implements ToolExecutor {
                             type: 'cc.Size'
                         }
                     });
-                } else if (propertyType === 'node' && processedValue && typeof processedValue === 'object' && 'uuid' in processedValue) {
+                } else if (actualPropertyType === 'node' && processedValue && typeof processedValue === 'object' && 'uuid' in processedValue) {
                     // 特殊处理节点引用
                     console.log(`[ComponentTools] Setting node reference with UUID: ${processedValue.uuid}`);
                     await Editor.Message.request('scene', 'set-property', {
@@ -933,7 +933,7 @@ export class ComponentTools implements ToolExecutor {
                             type: 'cc.Node'
                         }
                     });
-                } else if (propertyType === 'component' && typeof processedValue === 'string') {
+                } else if (actualPropertyType === 'component' && typeof processedValue === 'string') {
                     // 特殊处理组件引用：通过节点UUID找到组件的__id__
                     const targetNodeUuid = processedValue;
                     console.log(`[ComponentTools] Setting component reference - finding component on node: ${targetNodeUuid}`);
@@ -1055,7 +1055,7 @@ export class ComponentTools implements ToolExecutor {
                         console.error(`[ComponentTools] Error setting component reference:`, error);
                         throw error;
                     }
-                } else if (propertyType === 'nodeArray' && Array.isArray(processedValue)) {
+                } else if (actualPropertyType === 'nodeArray' && Array.isArray(processedValue)) {
                     // 特殊处理节点数组 - 保持预处理的格式
                     console.log(`[ComponentTools] Setting node array:`, processedValue);
                     
@@ -1066,7 +1066,7 @@ export class ComponentTools implements ToolExecutor {
                             value: processedValue  // 保持 [{uuid: "..."}, {uuid: "..."}] 格式
                         }
                     });
-                } else if (propertyType === 'colorArray' && Array.isArray(processedValue)) {
+                } else if (actualPropertyType === 'colorArray' && Array.isArray(processedValue)) {
                     // 特殊处理颜色数组
                     const colorArrayValue = processedValue.map((item: any) => {
                         if (item && typeof item === 'object' && 'r' in item) {
