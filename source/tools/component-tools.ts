@@ -224,59 +224,60 @@ export class ComponentTools implements ToolExecutor {
                 }
             }
             // 尝试直接使用 Editor API 添加组件
-            Editor.Message.request('scene', 'create-component', {
-                uuid: nodeUuid,
-                component: componentType
-            }).then(async (result: any) => {
+            try {
+                await Editor.Message.request('scene', 'create-component', {
+                    uuid: nodeUuid,
+                    component: componentType
+                });
+                
                 // 等待一段时间让Editor完成组件添加
                 await new Promise(resolve => setTimeout(resolve, 100));
+                
                 // 重新查询节点信息验证组件是否真的添加成功
-                try {
-                    const allComponentsInfo2 = await this.getComponents(nodeUuid);
-                    if (allComponentsInfo2.success && allComponentsInfo2.data?.components) {
-                        const addedComponent = allComponentsInfo2.data.components.find((comp: any) => comp.type === componentType);
-                        if (addedComponent) {
-                            resolve({
-                                success: true,
-                                message: `Component '${componentType}' added successfully`,
-                                data: {
-                                    nodeUuid: nodeUuid,
-                                    componentType: componentType,
-                                    componentVerified: true,
-                                    existing: false
-                                }
-                            });
-                        } else {
-                            resolve({
-                                success: false,
-                                error: `Component '${componentType}' was not found on node after addition. Available components: ${allComponentsInfo2.data.components.map((c: any) => c.type).join(', ')}`
-                            });
-                        }
+                const allComponentsInfo2 = await this.getComponents(nodeUuid);
+                if (allComponentsInfo2.success && allComponentsInfo2.data?.components) {
+                    const addedComponent = allComponentsInfo2.data.components.find((comp: any) => comp.type === componentType);
+                    if (addedComponent) {
+                        resolve({
+                            success: true,
+                            message: `Component '${componentType}' added successfully`,
+                            data: {
+                                nodeUuid: nodeUuid,
+                                componentType: componentType,
+                                componentVerified: true,
+                                existing: false
+                            }
+                        });
                     } else {
                         resolve({
                             success: false,
-                            error: `Failed to verify component addition: ${allComponentsInfo2.error || 'Unable to get node components'}`
+                            error: `Component '${componentType}' was not found on node after addition. Available components: ${allComponentsInfo2.data.components.map((c: any) => c.type).join(', ')}`
                         });
                     }
-                } catch (verifyError: any) {
+                } else {
                     resolve({
                         success: false,
-                        error: `Failed to verify component addition: ${verifyError.message}`
+                        error: `Failed to verify component addition: ${allComponentsInfo2.error || 'Unable to get node components'}`
                     });
                 }
-            }).catch((err: Error) => {
+            } catch (err: any) {
                 // 备用方案：使用场景脚本
-                const options = {
-                    name: 'cocos-mcp-server',
-                    method: 'addComponentToNode',
-                    args: [nodeUuid, componentType]
-                };
-                Editor.Message.request('scene', 'execute-scene-script', options).then((result: any) => {
+                console.warn(`[ComponentTools] Direct API failed, trying scene script: ${err.message}`);
+                try {
+                    const options = {
+                        name: 'cocos-mcp-server',
+                        method: 'addComponentToNode',
+                        args: [nodeUuid, componentType]
+                    };
+                    const result = await Editor.Message.request('scene', 'execute-scene-script', options);
                     resolve(result);
-                }).catch((err2: Error) => {
-                    resolve({ success: false, error: `Direct API failed: ${err.message}, Scene script failed: ${err2.message}` });
-                });
-            });
+                } catch (err2: any) {
+                    resolve({ 
+                        success: false, 
+                        error: `Direct API failed: ${err.message}, Scene script failed: ${err2.message}` 
+                    });
+                }
+            }
         });
     }
 
@@ -504,6 +505,28 @@ export class ComponentTools implements ToolExecutor {
         
         return new Promise(async (resolve) => {
             try {
+                // 验证必要参数
+                if (!nodeUuid) {
+                    resolve({ success: false, error: 'nodeUuid is required' });
+                    return;
+                }
+                if (!componentType) {
+                    resolve({ success: false, error: 'componentType is required' });
+                    return;
+                }
+                if (!property) {
+                    resolve({ success: false, error: 'property is required' });
+                    return;
+                }
+                if (!propertyType) {
+                    resolve({ success: false, error: 'propertyType is required' });
+                    return;
+                }
+                if (value === undefined || value === null) {
+                    resolve({ success: false, error: 'value is required' });
+                    return;
+                }
+                
                 console.log(`[ComponentTools] Setting ${componentType}.${property} (type: ${propertyType}) = ${JSON.stringify(value)} on node ${nodeUuid}`);
                 
                 // Step 0: 检测是否为节点属性，如果是则重定向到对应的节点方法
@@ -1105,6 +1128,16 @@ export class ComponentTools implements ToolExecutor {
 
     private async attachScript(nodeUuid: string, scriptPath: string): Promise<ToolResponse> {
         return new Promise(async (resolve) => {
+            // 验证必要参数
+            if (!nodeUuid) {
+                resolve({ success: false, error: 'nodeUuid is required' });
+                return;
+            }
+            if (!scriptPath) {
+                resolve({ success: false, error: 'scriptPath is required' });
+                return;
+            }
+            
             // 从脚本路径提取组件类名
             const scriptName = scriptPath.split('/').pop()?.replace('.ts', '').replace('.js', '');
             if (!scriptName) {
@@ -1129,12 +1162,15 @@ export class ComponentTools implements ToolExecutor {
                 }
             }
             // 首先尝试直接使用脚本名称作为组件类型
-            Editor.Message.request('scene', 'create-component', {
-                uuid: nodeUuid,
-                component: scriptName  // 使用脚本名称而非UUID
-            }).then(async (result: any) => {
+            try {
+                await Editor.Message.request('scene', 'create-component', {
+                    uuid: nodeUuid,
+                    component: scriptName  // 使用脚本名称而非UUID
+                });
+                
                 // 等待一段时间让Editor完成组件添加
                 await new Promise(resolve => setTimeout(resolve, 100));
+                
                 // 重新查询节点信息验证脚本是否真的添加成功
                 const allComponentsInfo2 = await this.getComponents(nodeUuid);
                 if (allComponentsInfo2.success && allComponentsInfo2.data?.components) {
@@ -1161,23 +1197,25 @@ export class ComponentTools implements ToolExecutor {
                         error: `Failed to verify script addition: ${allComponentsInfo2.error || 'Unable to get node components'}`
                     });
                 }
-            }).catch((err: Error) => {
+            } catch (err: any) {
                 // 备用方案：使用场景脚本
-                const options = {
-                    name: 'cocos-mcp-server',
-                    method: 'attachScript',
-                    args: [nodeUuid, scriptPath]
-                };
-                Editor.Message.request('scene', 'execute-scene-script', options).then((result: any) => {
+                console.warn(`[ComponentTools] Direct API failed for script attachment, trying scene script: ${err.message}`);
+                try {
+                    const options = {
+                        name: 'cocos-mcp-server',
+                        method: 'attachScript',
+                        args: [nodeUuid, scriptPath]
+                    };
+                    const result = await Editor.Message.request('scene', 'execute-scene-script', options);
                     resolve(result);
-                }).catch(() => {
+                } catch (err2: any) {
                     resolve({ 
                         success: false, 
-                        error: `Failed to attach script '${scriptName}': ${err.message}`,
+                        error: `Failed to attach script '${scriptName}': ${err.message}`, 
                         instruction: 'Please ensure the script is properly compiled and exported as a Component class. You can also manually attach the script through the Properties panel in the editor.'
                     });
-                });
-            });
+                }
+            }
         });
     }
 
@@ -1811,10 +1849,19 @@ export class ComponentTools implements ToolExecutor {
        * 生成组件建议信息
        */
       private generateComponentSuggestion(requestedType: string, availableTypes: string[], property: string): string {
+          // 验证参数
+          if (!requestedType) {
+              return '\n\n⚠️ Component type is not specified. Please provide a valid componentType parameter.';
+          }
+          
+          if (!availableTypes || availableTypes.length === 0) {
+              return '\n\n⚠️ No available components found on the node.';
+          }
+          
           // 检查是否存在相似的组件类型
           const similarTypes = availableTypes.filter(type => 
-              type.toLowerCase().includes(requestedType.toLowerCase()) || 
-              requestedType.toLowerCase().includes(type.toLowerCase())
+              type && type.toLowerCase().includes(requestedType.toLowerCase()) || 
+              requestedType.toLowerCase().includes(type ? type.toLowerCase() : '')
           );
           
           let instruction = '';

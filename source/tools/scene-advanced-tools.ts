@@ -747,7 +747,9 @@ export class SceneAdvancedTools implements ToolExecutor {
                     data: {
                         className: className,
                         hasScript: hasScript,
-                        message: hasScript ? `Component '${className}' has script` : `Component '${className}' does not have script`
+                        message: hasScript ?
+                         `Component '${className}' has script` :
+                         `Component '${className}' does not have script`
                     }
                 });
             }).catch((err: Error) => {
