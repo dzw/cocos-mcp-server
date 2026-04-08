@@ -131,6 +131,19 @@ export class MCPServer {
         }
 
         const enabledToolNames = new Set(enabledTools.map(tool => `${tool.category}_${tool.name}`));
+        
+        // 打印被过滤的工具信息
+        console.log(`[MCPServer] Filtering tools - Total: ${this.toolsList.length}, Enabled: ${enabledToolNames.size}`);
+        const filteredOut = this.toolsList.filter(tool => !enabledToolNames.has(tool.name));
+        if (filteredOut.length > 0) {
+            console.log(`[MCPServer] Filtered out ${filteredOut.length} tools:`);
+            filteredOut.forEach(tool => {
+                console.log(`  - ${tool.name}`);
+            });
+        } else {
+            console.log('[MCPServer] No tools were filtered out');
+        }
+        
         return this.toolsList.filter(tool => enabledToolNames.has(tool.name));
     }
 

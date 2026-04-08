@@ -147,6 +147,51 @@ export class ComponentTools implements ToolExecutor {
                 }
             },
             {
+                name: 'set_component_properties',
+                description: 'Set multiple properties on a component at once (batch operation)',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        nodeUuid: {
+                            type: 'string',
+                            description: 'Node UUID'
+                        },
+                        componentType: {
+                            type: 'string',
+                            description: 'Component type (e.g., "cc.Label", "cc.Sprite")'
+                        },
+                        properties: {
+                            type: 'array',
+                            description: 'Array of property settings to apply',
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    property: {
+                                        type: 'string',
+                                        description: 'Property name'
+                                    },
+                                    propertyType: {
+                                        type: 'string',
+                                        description: 'Property type - Must explicitly specify the property data type',
+                                        enum: [
+                                            'string', 'number', 'boolean', 'integer', 'float',
+                                            'color', 'vec2', 'vec3', 'size',
+                                            'node', 'component', 'spriteFrame', 'prefab', 'asset',
+                                            'nodeArray', 'colorArray', 'numberArray', 'stringArray'
+                                        ]
+                                    },
+                                    value: {
+                                        description: 'Property value - Same format as set_component_property'
+                                    }
+                                },
+                                required: ['property', 'value']
+                            }
+                        }
+                    },
+                    required: ['nodeUuid', 'componentType', 'properties']
+                }
+            },
+            {
                 name: 'attach_script',
                 description: 'Attach a script component to a node',
                 inputSchema: {
@@ -194,6 +239,8 @@ export class ComponentTools implements ToolExecutor {
                 return await this.getComponentInfo(args.nodeUuid, args.componentType);
             case 'set_component_property':
                 return await this.setComponentProperty(args);
+            case 'set_component_properties':
+                return await this.setComponentProperties(args);
             case 'attach_script':
                 return await this.attachScript(args.nodeUuid, args.scriptPath);
             case 'get_available_components':
@@ -1120,6 +1167,143 @@ export class ComponentTools implements ToolExecutor {
                 resolve({
                     success: false,
                     error: `Failed to set property: ${error.message}`
+                });
+            }
+        });
+    }
+
+    /**
+     * 批量设置组件的多个属性
+     * @param args 包含 nodeUuid, componentType, properties 数组
+     */
+    private async setComponentProperties(args: any): Promise<ToolResponse> {
+        const { nodeUuid, componentType, properties } = args;
+        
+        return new Promise(async (resolve) => {
+            try {
+                // 验证必要参数
+                if (!nodeUuid) {
+                    resolve({ success: false, error: 'nodeUuid is required' });
+                    return;
+                }
+                if (!componentType) {
+                    resolve({ success: false, error: 'componentType is required' });
+                    return;
+                }
+                if (!properties || !Array.isArray(properties) || properties.length === 0) {
+                    resolve({ success: false, error: 'properties array is required and must not be empty' });
+                    return;
+                }
+                
+                console.log(`[ComponentTools] Batch setting ${properties.length} properties on ${componentType} for node ${nodeUuid}`);
+                
+                // 先检查组件是否存在
+                const componentsResponse = await this.getComponents(nodeUuid);
+                if (!componentsResponse.success || !componentsResponse.data?.components) {
+                    resolve({
+                        success: false,
+                        error: `Failed to get components: ${componentsResponse.error}`
+                    });
+                    return;
+                }
+                
+                const availableTypes = componentsResponse.data.components.map((c: any) => c.type);
+                const targetComponent = componentsResponse.data.components.find((comp: any) => comp.type === componentType);
+                
+                if (!targetComponent) {
+                    const instruction = this.generateComponentSuggestion(componentType, availableTypes, '');
+                    resolve({
+                        success: false,
+                        error: `Component '${componentType}' not found on node. Available components: ${availableTypes.join(', ')}`,
+                        instruction: instruction
+                    });
+                    return;
+                }
+                
+                // 逐个设置属性
+                const results: Array<{ property: string; success: boolean; error?: string }> = [];
+                let hasError = false;
+                
+                for (let i = 0; i < properties.length; i++) {
+                    const propSetting = properties[i];
+                    
+                    // 验证每个属性设置的必需字段
+                    if (!propSetting.property) {
+                        results.push({
+                            property: `index_${i}`,
+                            success: false,
+                            error: 'property name is required'
+                        });
+                        hasError = true;
+                        continue;
+                    }
+                    
+                    if (propSetting.value === undefined || propSetting.value === null) {
+                        results.push({
+                            property: propSetting.property,
+                            success: false,
+                            error: 'value is required'
+                        });
+                        hasError = true;
+                        continue;
+                    }
+                    
+                    try {
+                        // 构造单个属性设置的参数
+                        const singlePropArgs = {
+                            nodeUuid,
+                            componentType,
+                            property: propSetting.property,
+                            propertyType: propSetting.propertyType,
+                            value: propSetting.value
+                        };
+                        
+                        // 调用现有的单属性设置方法
+                        const result = await this.setComponentProperty(singlePropArgs);
+                        
+                        results.push({
+                            property: propSetting.property,
+                            success: result.success,
+                            error: result.error
+                        });
+                        
+                        if (!result.success) {
+                            hasError = true;
+                            console.warn(`[ComponentTools] Failed to set property '${propSetting.property}': ${result.error}`);
+                        }
+                    } catch (error: any) {
+                        results.push({
+                            property: propSetting.property,
+                            success: false,
+                            error: error.message
+                        });
+                        hasError = true;
+                        console.error(`[ComponentTools] Error setting property '${propSetting.property}':`, error);
+                    }
+                }
+                
+                // 返回批量操作结果
+                const successCount = results.filter(r => r.success).length;
+                const failCount = results.filter(r => !r.success).length;
+                
+                resolve({
+                    success: !hasError,
+                    message: `Batch property update completed: ${successCount} succeeded, ${failCount} failed`,
+                    data: {
+                        nodeUuid,
+                        componentType,
+                        totalProperties: properties.length,
+                        successCount,
+                        failCount,
+                        results
+                    }
+                });
+                
+            } catch (error: any) {
+                console.error(`[ComponentTools] Error in batch property update:`, error);
+                resolve({
+                    success: false,
+                    error: `Batch property update failed: ${error.message}`
                 });
             }
         });

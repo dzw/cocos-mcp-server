@@ -403,11 +403,68 @@ export class ToolManager {
         if (!currentConfig) {
             return this.availableTools.filter(tool => tool.enabled);
         }
+        
+        // 检查是否有新工具需要添加到配置中
+        const existingToolKeys = new Set(
+            currentConfig.tools.map(t => `${t.category}_${t.name}`)
+        );
+        
+        let hasNewTools = false;
+        for (const availableTool of this.availableTools) {
+            const toolKey = `${availableTool.category}_${availableTool.name}`;
+            if (!existingToolKeys.has(toolKey)) {
+                // 发现新工具，添加到配置中
+                console.log(`[ToolManager] Adding new tool to config: ${toolKey}`);
+                currentConfig.tools.push({
+                    category: availableTool.category,
+                    name: availableTool.name,
+                    enabled: true, // 新工具默认启用
+                    description: availableTool.description
+                });
+                hasNewTools = true;
+            }
+        }
+        
+        // 如果有新工具添加，保存配置
+        if (hasNewTools) {
+            currentConfig.updatedAt = new Date().toISOString();
+            this.saveSettings();
+            console.log(`[ToolManager] Saved updated config with new tools`);
+        }
+        
         return currentConfig.tools.filter(tool => tool.enabled);
     }
 
     public getToolManagerState() {
         const currentConfig = this.getCurrentConfiguration();
+        
+        // 如果有当前配置，先同步新工具
+        if (currentConfig) {
+            const existingToolKeys = new Set(
+                currentConfig.tools.map(t => `${t.category}_${t.name}`)
+            );
+            
+            let hasNewTools = false;
+            for (const availableTool of this.availableTools) {
+                const toolKey = `${availableTool.category}_${availableTool.name}`;
+                if (!existingToolKeys.has(toolKey)) {
+                    console.log(`[ToolManager] Syncing new tool to UI: ${toolKey}`);
+                    currentConfig.tools.push({
+                        category: availableTool.category,
+                        name: availableTool.name,
+                        enabled: true, // 新工具默认启用
+                        description: availableTool.description
+                    });
+                    hasNewTools = true;
+                }
+            }
+            
+            if (hasNewTools) {
+                currentConfig.updatedAt = new Date().toISOString();
+                this.saveSettings();
+            }
+        }
+        
         return {
             success: true,
             availableTools: currentConfig ? currentConfig.tools : this.getAvailableTools(),
