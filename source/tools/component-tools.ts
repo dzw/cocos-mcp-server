@@ -429,7 +429,7 @@ export class ComponentTools implements ToolExecutor {
         
         // 检查组件是否有 value 属性，这通常包含实际的组件属性
         if (component.value && typeof component.value === 'object') {
-            console.log(`[extractComponentProperties] Found component.value with properties:`, Object.keys(component.value));
+            console.log(`[extractComponentProperties] Found component.value with properties:`, Object.keys(component.value).join(', '));
             return component.value; // 直接返回 value 对象，它包含所有组件属性
         }
         
@@ -444,7 +444,7 @@ export class ComponentTools implements ToolExecutor {
             }
         }
         
-        console.log(`[extractComponentProperties] Final extracted properties:`, Object.keys(properties));
+        console.log(`[extractComponentProperties] Final extracted properties:`, Object.keys(properties).join(', '));
         return properties;
     }
 
