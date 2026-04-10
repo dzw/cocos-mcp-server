@@ -69,13 +69,13 @@ export const methods: { [key: string]: (...any: any) => any } = {
         const wasRunning = mcpServer ? mcpServer.getStatus().running : false;
         const willAutoStart = settings.autoStart;
 
-        // 确保所有必填字段都有值
+        // 确保所有必填字段都有值，使用 ?? 处理 undefined/null，!! 确保布尔值
         const completeSettings: MCPServerSettings = {
-            port: settings.port || 3000,
-            autoStart: settings.autoStart || false,
-            enableDebugLog: settings.enableDebugLog || false,
-            allowedOrigins: settings.allowedOrigins || ['*'],
-            maxConnections: settings.maxConnections || 10
+            port: settings.port ?? 3000,
+            autoStart: !!settings.autoStart,
+            enableDebugLog: !!settings.enableDebugLog,
+            allowedOrigins: settings.allowedOrigins ?? ['*'],
+            maxConnections: settings.maxConnections ?? 10
         };
 
         saveSettings(completeSettings);
