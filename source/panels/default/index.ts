@@ -41,7 +41,7 @@ module.exports = Editor.Panel.define({
             console.log('[MCP Panel] Panel hidden');
         },
     },
-    template: readFileSync(join(__dirname, '../../../static/template/default/index.html'), 'utf-8'),
+    template: readFileSync(join(__dirname, '../../../static/template/default/index.vue'), 'utf-8'),
     style: readFileSync(join(__dirname, '../../../static/style/default/index.css'), 'utf-8'),
     $: {
         app: '#app',
@@ -72,6 +72,7 @@ module.exports = Editor.Panel.define({
 
                     const availableTools = ref<ToolConfig[]>([]);
                     const toolCategories = ref<string[]>([]);
+                    const collapsedCategories = ref<Record<string, boolean>>({});
 
 
                     // 计算属性
@@ -304,6 +305,32 @@ module.exports = Editor.Panel.define({
                         return categoryNames[category] || category;
                     };
 
+                    // 分类折叠相关方法
+                    const toggleCategoryCollapse = (category: string) => {
+                        collapsedCategories.value[category] = !collapsedCategories.value[category];
+                    };
+
+                    const isCategoryAllEnabled = (category: string): boolean => {
+                        const tools = getToolsByCategory(category);
+                        return tools.length > 0 && tools.every(t => t.enabled);
+                    };
+
+                    const getCategoryEnabledCount = (category: string): number => {
+                        return getToolsByCategory(category).filter(t => t.enabled).length;
+                    };
+
+                    const toggleCategoryCheckbox = async (category: string, enabled: boolean) => {
+                        const tools = getToolsByCategory(category);
+                        for (const tool of tools) {
+                            const toolIndex = availableTools.value.findIndex(t => t.category === category && t.name === tool.name);
+                            if (toolIndex !== -1) {
+                                availableTools.value[toolIndex].enabled = enabled;
+                            }
+                        }
+                        availableTools.value = [...availableTools.value];
+                        await saveChanges();
+                    };
+
 
                     // 监听设置变化
                     watch(settings, () => {
@@ -366,6 +393,7 @@ module.exports = Editor.Panel.define({
                         availableTools,
                         toolCategories,
                         settingsChanged,
+                        collapsedCategories,
 
                         // 计算属性
                         statusClass,
@@ -387,7 +415,11 @@ module.exports = Editor.Panel.define({
                         saveChanges,
                         toggleCategoryTools,
                         getToolsByCategory,
-                        getCategoryDisplayName
+                        getCategoryDisplayName,
+                        toggleCategoryCollapse,
+                        isCategoryAllEnabled,
+                        getCategoryEnabledCount,
+                        toggleCategoryCheckbox
                     };
                 },
                 template: readFileSync(join(__dirname, '../../../static/template/vue/mcp-server-app.vue'), 'utf-8'),

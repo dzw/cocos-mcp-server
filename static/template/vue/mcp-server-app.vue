@@ -73,52 +73,46 @@
     <!-- 工具管理选项卡 -->
     <div class="tab-content" v-show="activeTab === 'tools'">
         <section class="tool-manager">
-            <div class="tool-manager-header">
-                <h3>工具管理</h3>
-            </div>
-            
             <div class="tools-section">
                 <div class="tools-section-header">
                     <div class="tools-section-title">
-                        <h4>可用工具</h4>
-                        <div class="tools-stats">
-                            {{ totalTools }} 个工具
-                            ({{ enabledTools }} 启用 / {{ disabledTools }} 禁用)
-                        </div>
+                        <h4>可用工具 ({{ enabledTools }}/{{ totalTools }})</h4>
                     </div>
                     <div class="tools-section-controls">
                         <ui-button @click="selectAllTools" class="small">全选</ui-button>
-                        <ui-button @click="deselectAllTools" class="small">取消全选</ui-button>
-                        <ui-button @click="saveChanges" class="primary">保存更改</ui-button>
+                        <ui-button @click="deselectAllTools" class="small">全不选</ui-button>
+                        <ui-button @click="saveChanges" class="primary small">保存</ui-button>
                     </div>
                 </div>
-                
+
                 <div class="tools-container">
                     <div v-for="category in toolCategories" :key="category" class="tool-category">
-                        <div class="category-header">
-                            <h5>{{ getCategoryDisplayName(category) }}</h5>
-                            <div class="category-controls">
-                                <ui-button @click="toggleCategoryTools(category, true)" class="small">全选</ui-button>
-                                <ui-button @click="toggleCategoryTools(category, false)" class="small">取消全选</ui-button>
+                        <div class="category-header" @click="toggleCategoryCollapse(category)">
+                            <div class="category-left">
+                                <span class="collapse-icon" :class="{ collapsed: collapsedCategories[category] }">▶</span>
+                                <ui-checkbox
+                                    :value="isCategoryAllEnabled(category)"
+                                    @change="(event) => { event.stopPropagation(); toggleCategoryCheckbox(category, event.target.checked); }"
+                                    @click.stop
+                                ></ui-checkbox>
+                                <h5>{{ getCategoryDisplayName(category) }}</h5>
                             </div>
+                            <span class="category-count">{{ getCategoryEnabledCount(category) }}/{{ getToolsByCategory(category).length }}</span>
                         </div>
-                        <div class="tool-items">
+                        <div class="tool-items" v-show="!collapsedCategories[category]">
                             <div v-for="tool in getToolsByCategory(category)" :key="tool.name" class="tool-item">
-                                <ui-checkbox 
+                                <ui-checkbox
                                     :value="tool.enabled"
                                     @change="(event) => updateToolStatus(category, tool.name, event.target.checked)"
                                 ></ui-checkbox>
                                 <div class="tool-info">
                                     <div class="tool-name">{{ tool.name }}</div>
-                                    <div class="tool-description">{{ tool.description }}</div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            
-
         </section>
     </div>
 </div>

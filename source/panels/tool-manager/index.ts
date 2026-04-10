@@ -6,7 +6,7 @@ module.exports = Editor.Panel.define({
         show() { console.log('Tool Manager panel shown'); },
         hide() { console.log('Tool Manager panel hidden'); }
     },
-    template: readFileSync(join(__dirname, '../../../static/template/default/tool-manager.html'), 'utf-8'),
+    template: readFileSync(join(__dirname, '../../../static/template/default/tool-manager.vue'), 'utf-8'),
     style: readFileSync(join(__dirname, '../../../static/style/default/index.css'), 'utf-8'),
     $: {
         panelTitle: '#panelTitle',
