@@ -47,7 +47,7 @@ export class MCPServer {
             this.tools.refImage = new ReferenceImageTools();
             this.tools.assetAdvanced = new AssetAdvancedTools();
             this.tools.validation = new ValidationTools();
-            console.log('[MCPServer] Tools initialized successfully');
+            console.log('[MCPServer] Tools initialized successfully dzw');
         } catch (error) {
             console.error('[MCPServer] Error initializing tools:', error);
             throw error;

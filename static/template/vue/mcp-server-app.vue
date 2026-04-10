@@ -7,10 +7,11 @@
         <button class="tab-button" :class="{ active: activeTab === 'tools' }" @click="switchTab('tools')">
             <span>工具管理</span>
         </button>
+        <button class="reload-btn" @click="reloadExtension" title="重新加载扩展">↻</button>
     </div>
     
     <!-- 服务器选项卡 -->
-    <div class="tab-content" v-show="activeTab === 'server'">
+    <div class="tab-content server-tab" v-show="activeTab === 'server'">
         <section class="server-status">
             <h3>服务器状态</h3>
             <div class="status-info">
@@ -69,9 +70,9 @@
             <ui-button @click="saveSettings" :disabled="!settingsChanged">保存设置</ui-button>
         </footer>
     </div>
-    
+
     <!-- 工具管理选项卡 -->
-    <div class="tab-content" v-show="activeTab === 'tools'">
+    <div class="tab-content tools-tab" v-show="activeTab === 'tools'">
         <section class="tool-manager">
             <div class="tools-section">
                 <div class="tools-section-header">
@@ -81,6 +82,8 @@
                     <div class="tools-section-controls">
                         <ui-button @click="selectAllTools" class="small">全选</ui-button>
                         <ui-button @click="deselectAllTools" class="small">全不选</ui-button>
+                        <ui-button @click="collapseAll" class="small">折叠</ui-button>
+                        <ui-button @click="expandAll" class="small">展开</ui-button>
                         <ui-button @click="saveChanges" class="primary small">保存</ui-button>
                     </div>
                 </div>

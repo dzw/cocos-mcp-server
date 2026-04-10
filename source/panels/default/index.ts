@@ -2,9 +2,10 @@
 
 import {readFileSync} from 'fs-extra';
 import {join} from 'path';
-import {createApp, App, defineComponent, ref, computed, onMounted, watch, nextTick} from 'vue';
+import {createApp, App, defineComponent, ref, computed, onMounted, onUnmounted, watch, nextTick} from 'vue';
 
 const panelDataMap = new WeakMap<any, App>();
+const timerMap = new WeakMap<any, NodeJS.Timeout>();
 
 // 定义工具配置接口
 interface ToolConfig {
@@ -331,6 +332,40 @@ module.exports = Editor.Panel.define({
                         await saveChanges();
                     };
 
+                    // 折叠/展开全部
+                    const collapseAll = () => {
+                        toolCategories.value.forEach(cat => {
+                            collapsedCategories.value[cat] = true;
+                        });
+                    };
+
+                    const expandAll = () => {
+                        toolCategories.value.forEach(cat => {
+                            collapsedCategories.value[cat] = false;
+                        });
+                    };
+
+                    // 重新加载扩展
+                    const reloadExtension = async () => {
+                        try {
+                            // @ts-ignore
+                            var ext_path = Editor.Package.getPath("cocos-mcp-server")
+                            console.log("reload " + ext_path)
+                            if (ext_path != null) {
+                                setTimeout(() => {
+                                    if (ext_path != null) {
+                                        Editor.Package.enable(ext_path)
+                                    }
+                                }, 1500)
+
+                                Editor.Package.disable(ext_path)
+
+                            }
+                        } catch (error) {
+                            console.error('[Vue App] Failed to reload extension:', error);
+                        }
+                    };
+
 
                     // 监听设置变化
                     watch(settings, () => {
@@ -365,7 +400,7 @@ module.exports = Editor.Panel.define({
                         }
 
                         // 定期更新服务器状态
-                        setInterval(async () => {
+                        const timer = setInterval(async () => {
                             try {
                                 const result = await Editor.Message.request('cocos-mcp-server', 'get-server-status');
                                 if (result) {
@@ -376,9 +411,12 @@ module.exports = Editor.Panel.define({
                                     isProcessing.value = false;
                                 }
                             } catch (error) {
-                                console.error('[Vue App] Failed to get server status:', error);
+                                // 静默处理错误，避免日志刷屏
                             }
                         }, 2000);
+
+                        // 保存定时器ID以便清理
+                        timerMap.set(this, timer);
                     });
 
                     return {
@@ -419,7 +457,10 @@ module.exports = Editor.Panel.define({
                         toggleCategoryCollapse,
                         isCategoryAllEnabled,
                         getCategoryEnabledCount,
-                        toggleCategoryCheckbox
+                        toggleCategoryCheckbox,
+                        collapseAll,
+                        expandAll,
+                        reloadExtension
                     };
                 },
                 template: readFileSync(join(__dirname, '../../../static/template/vue/mcp-server-app.vue'), 'utf-8'),
@@ -434,9 +475,17 @@ module.exports = Editor.Panel.define({
     beforeClose() {
     },
     close() {
+        // 清除定时器
+        const timer = timerMap.get(this);
+        if (timer) {
+            clearInterval(timer);
+            timerMap.delete(this);
+        }
+        // 卸载Vue应用
         const app = panelDataMap.get(this);
         if (app) {
             app.unmount();
+            panelDataMap.delete(this);
         }
     },
 });
