@@ -426,19 +426,40 @@ export class NodeTools implements ToolExecutor {
 
                 console.log('Creating node with options:', createNodeOptions);
 
+                // 创建节点前等待场景就绪
+                try {
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                } catch (err) {
+                    console.warn('Delay before creation failed:', err);
+                }
+
                 // 创建节点
                 const nodeUuid = await Editor.Message.request('scene', 'create-node', createNodeOptions);
                 const uuid = Array.isArray(nodeUuid) ? nodeUuid[0] : nodeUuid;
 
+                if (!uuid) {
+                    resolve({
+                        success: false,
+                        error: 'Failed to create node: no UUID returned from create-node API'
+                    });
+                    return;
+                }
+
+                console.log(`Node created successfully with UUID: ${uuid}`);
+
+                // 关键：等待节点完全注册到场景中，避免连续调用时的竞态条件
+                await new Promise(resolve => setTimeout(resolve, 100));
+
                 // 处理兄弟索引
                 if (args.siblingIndex !== undefined && args.siblingIndex >= 0 && uuid && targetParentUuid) {
                     try {
-                        await new Promise(resolve => setTimeout(resolve, 100)); // 等待内部状态更新
                         await Editor.Message.request('scene', 'set-parent', {
                             parent: targetParentUuid,
                             uuids: [uuid],
                             keepWorldTransform: args.keepWorldTransform || false
                         });
+                        // 等待 set-parent 操作完成
+                        await new Promise(resolve => setTimeout(resolve, 50));
                     } catch (err) {
                         console.warn('Failed to set sibling index:', err);
                     }
@@ -447,7 +468,8 @@ export class NodeTools implements ToolExecutor {
                 // 添加组件（如果提供的话）
                 if (args.components && args.components.length > 0 && uuid) {
                     try {
-                        await new Promise(resolve => setTimeout(resolve, 100)); // 等待节点创建完成
+                        // 等待节点完全初始化
+                        await new Promise(resolve => setTimeout(resolve, 50));
                         for (const componentType of args.components) {
                             try {
                                 const result = await this.componentTools.execute('add_component', {
@@ -459,6 +481,8 @@ export class NodeTools implements ToolExecutor {
                                 } else {
                                     console.warn(`Failed to add component ${componentType}:`, result.error);
                                 }
+                                // 每个组件添加后短暂延迟
+                                await new Promise(resolve => setTimeout(resolve, 30));
                             } catch (err) {
                                 console.warn(`Failed to add component ${componentType}:`, err);
                             }
@@ -471,7 +495,8 @@ export class NodeTools implements ToolExecutor {
                 // 设置初始变换（如果提供的话）
                 if (args.initialTransform && uuid) {
                     try {
-                        await new Promise(resolve => setTimeout(resolve, 150)); // 等待节点和组件创建完成
+                        // 等待节点和组件完全初始化
+                        await new Promise(resolve => setTimeout(resolve, 50));
                         await this.setNodeTransform({
                             uuid: uuid,
                             position: args.initialTransform.position,
@@ -483,6 +508,9 @@ export class NodeTools implements ToolExecutor {
                         console.warn('Failed to set initial transform:', err);
                     }
                 }
+
+                // 最终延迟，确保所有操作完成后再返回，为下一次调用做好准备
+                await new Promise(resolve => setTimeout(resolve, 50));
 
                 // 获取创建后的节点信息进行验证
                 let verificationData: any = null;
