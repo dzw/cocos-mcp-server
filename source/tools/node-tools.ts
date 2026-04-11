@@ -696,6 +696,20 @@ export class NodeTools implements ToolExecutor {
 
     private async setNodeProperty(uuid: string, property: string, value: any): Promise<ToolResponse> {
         return new Promise((resolve) => {
+            // 检测是否为 UITransform 组件的属性（应该使用 cc.UITransform 组件）
+            const uiTransformProperties = [
+                'contentSize', 'anchorPoint', '_contentSize', '_anchorPoint', 'width', 'height', 'anchorX', 'anchorY'
+            ];
+            
+            if (uiTransformProperties.includes(property)) {
+                resolve({
+                    success: false,
+                    error: `Property '${property}' is a UITransform component property, not a node property`,
+                    instruction: `Property '${property}' should be set using cc.UITransform component. Please use: component_set_component_property(nodeUuid="${uuid}", componentType="cc.UITransform", property="${property}", propertyType="${property === 'contentSize' || property === '_contentSize' ? 'size' : 'vec2'}", value=${JSON.stringify(value)})`
+                });
+                return;
+            }
+            
             // 尝试直接使用 Editor API 设置节点属性
             Editor.Message.request('scene', 'set-property', {
                 uuid: uuid,
