@@ -2,7 +2,7 @@
 
 import {readFileSync} from 'fs-extra';
 import {join} from 'path';
-import {createApp, App, defineComponent, ref, computed, onMounted, onUnmounted, watch, nextTick} from 'vue';
+import {createApp, App, defineComponent, ref, computed, onMounted, onUnmounted, watch, nextTick, getCurrentInstance} from 'vue';
 
 const panelDataMap = new WeakMap<any, App>();
 const timerMap = new WeakMap<any, NodeJS.Timeout>();
@@ -415,8 +415,11 @@ module.exports = Editor.Panel.define({
                             }
                         }, 2000);
 
-                        // 保存定时器ID以便清理
-                        timerMap.set(this, timer);
+                        // 保存定时器ID以便清理 - 使用 currentInstance 作为 key
+                        const currentInstance = getCurrentInstance();
+                        if (currentInstance) {
+                            timerMap.set(currentInstance, timer);
+                        }
                     });
 
                     return {
@@ -475,12 +478,12 @@ module.exports = Editor.Panel.define({
     beforeClose() {
     },
     close() {
-        // 清除定时器
-        const timer = timerMap.get(this);
-        if (timer) {
+        // 清除定时器 - 遍历所有可能的实例
+        for (const [key, timer] of Array.from(timerMap.entries())) {
             clearInterval(timer);
-            timerMap.delete(this);
+            timerMap.delete(key);
         }
+        
         // 卸载Vue应用
         const app = panelDataMap.get(this);
         if (app) {
