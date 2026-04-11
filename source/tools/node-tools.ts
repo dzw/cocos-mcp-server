@@ -205,6 +205,39 @@ export class NodeTools implements ToolExecutor {
                 }
             },
             {
+                name: 'set_node_properties',
+                description: 'Set multiple node properties at once (batch operation). Suitable for setting simple properties like active, name, layer, mobility. For transform properties (position, rotation, scale), prefer using set_node_transform.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        uuid: {
+                            type: 'string',
+                            description: 'Node UUID'
+                        },
+                        properties: {
+                            type: 'array',
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    property: {
+                                        type: 'string',
+                                        description: 'Property name (e.g., active, name, layer, mobility). Note: Do not use for UITransform properties (contentSize, anchorPoint, etc.) or transform properties (position, rotation, scale).'
+                                    },
+                                    value: {
+                                        type: ['string', 'number', 'boolean', 'object', 'null'],
+                                        description: 'Property value. Type depends on the property being set.'
+                                    }
+                                },
+                                required: ['property', 'value']
+                            },
+                            description: 'Array of property settings to apply. Each item must have "property" and "value" fields.',
+                            minItems: 1
+                        }
+                    },
+                    required: ['uuid', 'properties']
+                }
+            },
+            {
                 name: 'delete_node',
                 description: 'Delete a node from scene',
                 inputSchema: {
@@ -293,6 +326,8 @@ export class NodeTools implements ToolExecutor {
                 return await this.setNodeProperty(args.uuid, args.property, args.value);
             case 'set_node_transform':
                 return await this.setNodeTransform(args);
+            case 'set_node_properties':
+                return await this.setNodeProperties(args);
             case 'delete_node':
                 return await this.deleteNode(args.uuid);
             case 'move_node':
@@ -757,6 +792,110 @@ export class NodeTools implements ToolExecutor {
                     resolve({ success: false, error: `Direct API failed: ${err.message}, Scene script failed: ${err2.message}` });
                 });
             });
+        });
+    }
+
+    private async setNodeProperties(args: any): Promise<ToolResponse> {
+        return new Promise(async (resolve) => {
+            const { uuid, properties } = args;
+            
+            if (!properties || !Array.isArray(properties) || properties.length === 0) {
+                resolve({ success: false, error: 'Properties array is required and must not be empty' });
+                return;
+            }
+            
+            const results: any[] = [];
+            const errors: string[] = [];
+            const updatedProperties: string[] = [];
+            
+            // Process properties sequentially to avoid potential race conditions with Editor API
+            for (const prop of properties) {
+                const { property, value } = prop;
+                
+                if (!property) {
+                    errors.push(`Property name is required for one of the items`);
+                    results.push({
+                        property: 'unknown',
+                        value: value,
+                        success: false,
+                        error: 'Property name is missing'
+                    });
+                    continue;
+                }
+                
+                try {
+                    const result = await this.setNodeProperty(uuid, property, value);
+                    const resultItem: any = {
+                        property: property,
+                        value: value,
+                        success: result.success,
+                        message: result.message
+                    };
+                    
+                    if (result.error) {
+                        resultItem.error = result.error;
+                    }
+                    if (result.instruction) {
+                        resultItem.instruction = result.instruction;
+                    }
+                    
+                    results.push(resultItem);
+                    
+                    if (result.success) {
+                        updatedProperties.push(property);
+                    } else {
+                        errors.push(`Failed to set property '${property}': ${result.error || 'Unknown error'}`);
+                    }
+                } catch (err: any) {
+                    const errorMsg = err.message || 'Unknown error';
+                    errors.push(`Failed to set property '${property}': ${errorMsg}`);
+                    results.push({
+                        property: property,
+                        value: value,
+                        success: false,
+                        error: errorMsg
+                    });
+                }
+            }
+            
+            const successCount = updatedProperties.length;
+            const totalCount = properties.length;
+            const hasPartialSuccess = successCount > 0 && successCount < totalCount;
+            
+            if (successCount === 0) {
+                resolve({
+                    success: false,
+                    error: `Failed to set any properties. Errors: ${errors.join('; ')}`,
+                    data: {
+                        nodeUuid: uuid,
+                        attemptedProperties: properties,
+                        results: results,
+                        errors: errors,
+                        successCount: 0,
+                        totalCount: totalCount
+                    }
+                });
+                return;
+            }
+            
+            const response: any = {
+                success: true,
+                partialSuccess: hasPartialSuccess,
+                message: `Successfully set ${successCount}/${totalCount} properties${hasPartialSuccess ? ' (some failed)' : ''}`,
+                data: {
+                    nodeUuid: uuid,
+                    updatedProperties: updatedProperties,
+                    successCount: successCount,
+                    totalCount: totalCount,
+                    results: results
+                }
+            };
+            
+            if (errors.length > 0) {
+                response.warning = `${errors.length} property/properties failed: ${errors.join('; ')}`;
+            }
+            
+            resolve(response);
         });
     }
 
