@@ -2,10 +2,10 @@
 
 import {readFileSync} from 'fs-extra';
 import {join} from 'path';
-import {createApp, App, defineComponent, ref, computed, onMounted, onUnmounted, watch, nextTick, getCurrentInstance} from 'vue';
+import {createApp, App, defineComponent, ref, computed, onMounted, onUnmounted, watch, nextTick} from 'vue';
 
 const panelDataMap = new WeakMap<any, App>();
-const timerMap = new WeakMap<any, NodeJS.Timeout>();
+let panelTimer: NodeJS.Timeout | null = null;
 
 // 定义工具配置接口
 interface ToolConfig {
@@ -415,11 +415,8 @@ module.exports = Editor.Panel.define({
                             }
                         }, 2000);
 
-                        // 保存定时器ID以便清理 - 使用 currentInstance 作为 key
-                        const currentInstance = getCurrentInstance();
-                        if (currentInstance) {
-                            timerMap.set(currentInstance, timer);
-                        }
+                        // 保存定时器ID以便清理
+                        panelTimer = timer;
                     });
 
                     return {
@@ -478,10 +475,10 @@ module.exports = Editor.Panel.define({
     beforeClose() {
     },
     close() {
-        // 清除定时器 - 遍历所有可能的实例
-        for (const [key, timer] of Array.from(timerMap.entries())) {
-            clearInterval(timer);
-            timerMap.delete(key);
+        // 清除定时器
+        if (panelTimer) {
+            clearInterval(panelTimer);
+            panelTimer = null;
         }
         
         // 卸载Vue应用
